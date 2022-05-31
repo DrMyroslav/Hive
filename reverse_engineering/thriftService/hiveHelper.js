@@ -512,7 +512,10 @@ const findConstraint = (extendedTable, constraintStartWith) => {
 	return constraint[0];
 };
 
-const getTableConstraints = (extendedTable = []) => {
+const getTableConstraints = (tableSchema, extendedTable = []) => {
+	const _ = dependencies.lodash;
+	const columnNames = _.get(tableSchema, 'schema.columns', []).map(column => getColumnName(column));
+
 	const columnToConstraints = {};
 	const tableToConstraints = {};
 	const uniqueConstraint = findConstraint(extendedTable, 'Unique Constraints');
@@ -535,22 +538,27 @@ const getTableConstraints = (extendedTable = []) => {
 
 	const checkConstraint = findConstraint(extendedTable, 'Check Constraints');
 	if (checkConstraint) {
-		setConstraintWithValue(
-			checkConstraint,
-			'check',
-			/Column Name: (.*?), Check Expression : (.*?)\)}/g,
-			columnToConstraints
-		);
+		setConstraintWithValue({
+			constraintString: checkConstraint,
+			constraintKeyword: 'check',
+			regExp: /Column Name: (.*?), Check Expression : (.*?\)?)\)/g,
+			columnToConstraints,
+			tableToConstraints,
+			tableConstraintKeyword: 'chkConstr',
+			tableColumnKeyword: 'checkExpression',
+			columnNames
+		});
 	}
 
 	const defaultConstraint = findConstraint(extendedTable, 'Default Constraints');
 	if (defaultConstraint) {
-		setConstraintWithValue(
-			defaultConstraint,
-			'default',
-			/Column Name: (.*?), Default Value: (.*?)\)}/g,
-			columnToConstraints
-		);
+		setConstraintWithValue({
+			constraintString: defaultConstraint,
+			constraintKeyword: 'default',
+			regExp: /Column Name: (.*?), Default Value: (.*?)\)/g,
+			columnToConstraints,
+			columnNames
+		});
 	}
 
 	return { columnToConstraints, notNullColumns, tableToConstraints };
@@ -595,12 +603,28 @@ const setBooleanConstraint = (constraintString, constraintKeyword, columnToConst
 	});
 }
 
-const setConstraintWithValue = (constraintString, constraintKeyword, regExp, columnToConstraints) => {
-	const columnsData = Array.from(
-		constraintString.matchAll(regExp)
-  	).map((item) => ({ name: item[1], value: item[2] }));
-	columnsData.forEach(({ name, value }) => {
-		columnToConstraints[name] = Object.assign({}, columnToConstraints[name], { [constraintKeyword]: value });
+const setConstraintWithValue = ({ 
+	constraintString, 
+	constraintKeyword, 
+	regExp, 
+	columnToConstraints, 
+	columnNames, 
+	tableToConstraints, 
+	tableConstraintKeyword,
+	tableColumnKeyword
+}) => {
+	const constraints = getConstraints(constraintString);
+	constraints.forEach(({ constraintName, columnsConstraint }) => {
+		const columnsData = Array.from(
+			columnsConstraint.matchAll(regExp)
+			).map((item) => ({ name: item[1], value: item[2] }));
+		columnsData.forEach(({ name, value }) => {
+			if (columnNames.includes(name)) {
+				columnToConstraints[name] = Object.assign({}, columnToConstraints[name], { [constraintKeyword]: value });
+			} else if (tableToConstraints) {
+				tableToConstraints[tableConstraintKeyword] = [...(tableToConstraints?.[tableConstraintKeyword] || []), { constraintName, [tableColumnKeyword]: value }];
+			}
+		});
 	});
 }
 

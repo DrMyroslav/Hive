@@ -70,7 +70,22 @@ const getUniqueKeyStatement = (jsonSchema, isParentItemActivated) => {
 	return constraintsStatement.join(',\n');
 };
 
+const getCheckConstraint = jsonSchema => {
+	const checks = jsonSchema.chkConstr || [];
+	const createCheckStatement = ({ constraintName, checkExpression, constraintOptsStatement }) => `CONSTRAINT ${constraintName} CHECK ${checkExpression}${constraintOptsStatement}`;
+
+	const checkConstraint = checks.map(check => {
+		const { constraintName, rely, noValidateSpecification, enableSpecification, checkExpression } = check || {};
+		const constraintOptsStatement = getConstraintOpts({ noValidateSpecification, enableSpecification, rely });
+
+		return createCheckStatement({ constraintName, checkExpression, constraintOptsStatement });
+	});
+
+	return checkConstraint.join(',\n');
+};
+
 module.exports = {
 	getConstraintOpts,
-	getUniqueKeyStatement
+	getUniqueKeyStatement,
+	getCheckConstraint
 }

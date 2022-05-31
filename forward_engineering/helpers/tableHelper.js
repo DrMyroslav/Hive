@@ -21,18 +21,19 @@ const setDependencies = ({ lodash }) => _ = lodash;
 const getCreateStatement = ({
 	dbName, tableName, isTemporary, isExternal, columnStatement, primaryKeyStatement, foreignKeyStatement, comment, partitionedByKeys, 
 	clusteredKeys, sortedKeys, numBuckets, skewedStatement, rowFormatStatement, storedAsStatement, location, tableProperties, selectStatement,
-	isActivated, ifNotExist, uniqueKeyStatement
+	isActivated, ifNotExist, uniqueKeyStatement, checkStatement,
 }) => {
 	const temporary = isTemporary ? 'TEMPORARY' : '';
 	const external = isExternal ? 'EXTERNAL' : '';
 	const tempExtStatement = ' ' + [temporary, external].filter(d => d).map(item => item + ' ').join('');
 	const fullTableName = dbName ? `${dbName}.${tableName}` : tableName;
-	const hasConstraint = primaryKeyStatement || uniqueKeyStatement;
+	const hasConstraint = primaryKeyStatement || uniqueKeyStatement || checkStatement;
 
 	return buildStatement(`CREATE${tempExtStatement}TABLE ${ifNotExist ? 'IF NOT EXISTS ' : ''}${fullTableName} (`, isActivated)
 		(columnStatement, columnStatement + (hasConstraint  ? ',' : ''))
 		(primaryKeyStatement, primaryKeyStatement + (uniqueKeyStatement ? ',' : ''))
-		(uniqueKeyStatement, uniqueKeyStatement)
+		(uniqueKeyStatement, uniqueKeyStatement + (checkStatement ? ',' : ''))
+		(checkStatement, checkStatement)
 		(foreignKeyStatement, foreignKeyStatement)
 		(true, ')')
 		(comment, `COMMENT '${encodeStringLiteral(comment)}'`)
@@ -212,6 +213,7 @@ const getTableStatement = (containerData, entityData, jsonSchema, definitions, f
 		columnStatement: getColumnsStatement(removePartitions(columns, keyNames.compositePartitionKey), isTableActivated),
 		primaryKeyStatement: areForeignPrimaryKeyConstraintsAvailable ? getPrimaryKeyStatement(jsonSchema, keyNames.primaryKeys, deactivatedColumnNames, isTableActivated) : null,
 		uniqueKeyStatement: areForeignPrimaryKeyConstraintsAvailable ? constraintHelper.getUniqueKeyStatement(jsonSchema, deactivatedColumnNames, isTableActivated) : null,
+		checkStatement: areColumnConstraintsAvailable ? constraintHelper.getCheckConstraint(jsonSchema) : null,
 		foreignKeyStatement: areForeignPrimaryKeyConstraintsAvailable ? foreignKeyStatement : null,
 		comment: tableData.description,
 		partitionedByKeys: getPartitionKeyStatement(getPartitionsKeys(columns, keyNames.compositePartitionKey, isTableActivated)),
